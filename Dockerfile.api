@@ -1,0 +1,49 @@
+FROM nvidia/cuda:13.0.0-cudnn-runtime-ubuntu24.04@sha256:6477166585af57524a052c59c611d23007a40fed605f8034684af2596e2a9ffb
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    TMPDIR=/tmp \
+    PATH=/opt/venv/bin:$PATH \
+    EDGEAI_API_HOST=0.0.0.0 \
+    EDGEAI_API_PORT=8000 \
+    EDGEAI_API_RUNTIME=pytorch \
+    EDGEAI_API_DEVICE=cuda \
+    EDGEAI_API_IMGSZ=640 \
+    EDGEAI_API_CONF=0.25 \
+    EDGEAI_API_IOU=0.70 \
+    EDGEAI_API_MAX_UPLOAD_BYTES=20971520 \
+    EDGEAI_API_MAX_VIDEO_BYTES=104857600 \
+    EDGEAI_API_MAX_VIDEO_SECONDS=120 \
+    EDGEAI_API_MAX_VIDEO_FRAMES=3600
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        libgl1 \
+        libglib2.0-0 \
+        python3.12 \
+        python3.12-venv \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --system --gid 10001 edgeai \
+    && useradd --system --uid 10001 --gid edgeai \
+        --home-dir /home/edgeai --create-home --shell /usr/sbin/nologin edgeai \
+    && mkdir -p /app/models \
+    && chmod 1777 /tmp
+
+WORKDIR /app
+
+COPY requirements-api.txt /app/requirements-api.txt
+RUN python3.12 -m venv /opt/venv \
+    && python -m pip install --no-cache-dir -r /app/requirements-api.txt \
+    && python -m pip check
+
+COPY edgeai/ /app/edgeai/
+
+USER edgeai:edgeai
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=300s --retries=5 \
+    CMD python -c "import json,urllib.request; response=urllib.request.urlopen('http://127.0.0.1:${EDGEAI_API_PORT}/health',timeout=5); health=json.load(response); assert health.get('status') == 'ready' and health.get('detector_initialized') is True"
+
+CMD ["sh", "-c", "exec python -m uvicorn edgeai.api:app --host \"${EDGEAI_API_HOST}\" --port \"${EDGEAI_API_PORT}\" --workers 1"]

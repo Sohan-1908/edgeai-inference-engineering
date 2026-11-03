@@ -1,0 +1,17 @@
+# Python 3.12 Linux backend runtime. CUDA 13.0 PyTorch wheels are published
+# on the official PyTorch index; ONNX Runtime 1.30 uses CUDA 13.0 / cuDNN 9.
+--extra-index-url https://download.pytorch.org/whl/cu130
+
+torch==2.14.0+cu130
+torchvision==0.29.0+cu130
+numpy==2.5.4
+opencv-python==5.0.0.93
+ultralytics==8.4.197
+lap==0.5.13
+onnx==1.23.0
+onnxruntime-gpu==1.30.0
+fastapi==0.162.0
+pydantic==2.14.2
+starlette==1.10.0
+uvicorn==0.54.0
+python-multipart==0.0.33

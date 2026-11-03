@@ -1,0 +1,33 @@
+FROM python:3.12-slim-bookworm@sha256:623674a14ef93d052bb9b0de4dbf5f28eb578a35263838941cc8aa43213c1487
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    HOME=/home/dashboard \
+    STREAMLIT_CONFIG_DIR=/home/dashboard/.streamlit \
+    EDGEAI_API_BASE_URL=http://api:8000
+
+RUN groupadd --system --gid 10001 dashboard \
+    && useradd --system --uid 10001 --gid dashboard \
+        --home-dir /home/dashboard --create-home --shell /usr/sbin/nologin dashboard \
+    && mkdir -p /app/edgeai /app/.streamlit /home/dashboard/.streamlit \
+    && chown -R dashboard:dashboard /app /home/dashboard
+
+WORKDIR /app
+
+COPY requirements-dashboard.txt /app/requirements-dashboard.txt
+RUN python -m pip install --no-cache-dir -r /app/requirements-dashboard.txt \
+    && python -m pip check
+
+COPY --chown=dashboard:dashboard app.py /app/app.py
+COPY --chown=dashboard:dashboard edgeai/__init__.py edgeai/api_client.py /app/edgeai/
+COPY --chown=dashboard:dashboard .streamlit/config.toml /app/.streamlit/config.toml
+
+USER dashboard:dashboard
+
+EXPOSE 8501
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+    CMD ["python", "-c", "import urllib.request; response=urllib.request.urlopen('http://127.0.0.1:8501/_stcore/health',timeout=3); assert response.status == 200"]
+
+CMD ["python", "-m", "streamlit", "run", "app.py", "--server.address=0.0.0.0", "--server.port=8501", "--server.headless=true", "--browser.gatherUsageStats=false"]

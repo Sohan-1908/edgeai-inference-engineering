@@ -1,0 +1,44 @@
+﻿# Python environments
+.venv/
+venv/
+env/
+
+# Python cache and test artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Secrets and local environment files
+.env
+.env.*
+!.env.example
+
+# Generated runtime outputs
+outputs/
+runs/
+*.log
+*.tmp
+
+# IDE and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Generated demo and experiment artifacts
+edgeai_annotated_video.mp4
+edgeai_tracked_video.mp4
+final_track_*.mp4
+*_headers*.txt
+no_tracking_*.mp4
+pytorch_no_tracking.mp4
+tracking_*.mp4
+
+# Generated profiling and response artifacts
+onnxruntime_profile_*.json
+edgeai_response.json
+edgeai_test.png

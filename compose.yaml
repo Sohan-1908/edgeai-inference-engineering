@@ -1,0 +1,49 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    environment:
+      EDGEAI_API_RUNTIME: ${EDGEAI_API_RUNTIME:-onnx}
+      EDGEAI_API_DEVICE: ${EDGEAI_API_DEVICE:-cuda}
+      EDGEAI_API_IMGSZ: ${EDGEAI_API_IMGSZ:-640}
+      EDGEAI_API_ONNX_MODEL: ${EDGEAI_API_ONNX_MODEL:-models/yolo11n.onnx}
+    ports:
+      - "127.0.0.1:${EDGEAI_API_HOST_PORT:-8000}:8000"
+    expose:
+      - "8000"
+    volumes:
+      - type: bind
+        source: ./yolo11n.pt
+        target: /app/yolo11n.pt
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./models
+        target: /app/models
+        read_only: true
+        bind:
+          create_host_path: false
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities:
+                - gpu
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile.dashboard
+    ports:
+      - "127.0.0.1:${EDGEAI_DASHBOARD_HOST_PORT:-8501}:8501"
+    expose:
+      - "8501"
+    environment:
+      EDGEAI_API_BASE_URL: http://api:8000
+    depends_on:
+      api:
+        condition: service_healthy

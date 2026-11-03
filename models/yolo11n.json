@@ -1,0 +1,43 @@
+{
+  "path": "C:\\Users\\sohan\\Desktop\\Coding\\Agentic AI (course era)\\projects\\r-project-3\\EdgeAI\\models\\yolo11n.onnx",
+  "input": {
+    "name": "images",
+    "shape": [
+      1,
+      3,
+      640,
+      640
+    ],
+    "type": "tensor(float)"
+  },
+  "outputs": [
+    {
+      "name": "output0",
+      "shape": [
+        1,
+        84,
+        8400
+      ],
+      "type": "tensor(float)"
+    }
+  ],
+  "opsets": {
+    "ai.onnx": 17
+  },
+  "file_size_bytes": 10701975,
+  "sha256": "f4d67ad8ac7ede791238e0d540f07fc975fe504da98230006df431d14481fe50",
+  "onnx_version": "1.23.0",
+  "onnxruntime_version": "1.30.0",
+  "source_weights": "C:\\Users\\sohan\\Desktop\\Coding\\Agentic AI (course era)\\projects\\r-project-3\\EdgeAI\\yolo11n.pt",
+  "source_weights_sha256": "0ebbc80d4a7680d14987a577cd21342b65ecfd94632bd9a8da63ae6417644ee1",
+  "export_ms": 3992.641300021205,
+  "precision": "FP32",
+  "batch_size": 1,
+  "input_size": [
+    640,
+    640
+  ],
+  "dynamic_shapes": false,
+  "nms_embedded": false,
+  "opset_requested": 17
+}

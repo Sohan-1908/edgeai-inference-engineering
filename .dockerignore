@@ -1,0 +1,43 @@
+# Python environments and generated state
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.cache/
+cache/
+
+# Git, local credentials, and configuration secrets
+.git/
+.env
+.env.*
+!.env.example
+.streamlit/
+!.streamlit/
+!.streamlit/config.toml
+credentials.toml
+credentials.json
+secrets.toml
+*.pem
+*.key
+
+# Model artifacts are mounted read-only at runtime, not copied into the image
+*.pt
+*.onnx
+models/*.json
+
+# Test, documentation, benchmark, and generated output data
+tests/
+docs/
+outputs/
+runs/
+benchmarks/
+*.avi
+*.mp4
+*.mov
+onnxruntime_profile*.json
+
+# Native development dependency list is not used by this image
+requirements.txt

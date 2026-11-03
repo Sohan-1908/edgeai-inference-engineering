@@ -1,0 +1,771 @@
+EDGEAI Real-Time Computer Vision Inference and Optimization System
+Project Specification and Development Blueprint
+
+============================================================ 1. PROJECT
+OVERVIEW ============================================================
+
+Project name: EdgeAI - Real-Time Computer Vision Inference and
+Optimization System
+
+One-line description: An application that detects and tracks objects in
+images and videos, exposes the model through an API, and provides
+reproducible benchmarks comparing inference speed, throughput, memory
+consumption and detection quality across different runtime and
+optimization configurations.
+
+Why build this project? The purpose is not simply to make another
+object-detection demo. The important engineering contribution is to
+build a complete inference pipeline and measure how implementation
+choices affect performance.
+
+The project should demonstrate three related capabilities:
+
+1.  Computer Vision: Understand images and video frames, detect objects
+    and track them across frames.
+
+2.  Inference Optimization: Measure and improve the efficiency of a
+    trained model using supported techniques such as input-resolution
+    changes, runtime comparisons, precision changes and hardware
+    comparisons.
+
+3.  Model Deployment: Expose the inference pipeline through an API and
+    provide a usable dashboard for uploading media, viewing predictions
+    and comparing benchmark results.
+
+The project should use pretrained open-source models initially. Training
+a model from scratch is not required for the first version.
+
+============================================================ 2. THE
+PROBLEM THE PROJECT SOLVES
+============================================================
+
+A pretrained object-detection model can identify objects in an image,
+but using it in a real application involves more than calling a
+prediction function.
+
+An engineer needs to answer questions such as:
+
+-   How long does one prediction take?
+-   How many frames can the system process per second?
+-   Does GPU execution improve performance compared with CPU execution
+    on the available hardware?
+-   How does image resolution affect latency and detection quality?
+-   Does exporting the model to ONNX Runtime change performance?
+-   Does quantization reduce model size or memory use?
+-   Does an optimization reduce accuracy?
+-   Can the model be served reliably through an API?
+-   Can another developer reproduce the benchmark results?
+
+EdgeAI brings these tasks into one application.
+
+============================================================ 3. CORE
+USER WORKFLOW
+============================================================
+
+A user should be able to:
+
+1.  Open the EdgeAI dashboard.
+2.  Upload an image or video, or use a webcam if the local environment
+    supports it.
+3.  Select an available object-detection model.
+4.  Run object detection.
+5.  View bounding boxes, class labels and confidence scores.
+6.  Run object tracking on video and see persistent tracking IDs.
+7.  View processing statistics such as latency and FPS.
+8.  Open the benchmark section.
+9.  Compare available model/runtime configurations.
+10. Export or download a benchmark report.
+
+The application must clearly distinguish between: - A prediction
+result. - A benchmark measurement. - A hardware capability that is
+unavailable on the current machine.
+
+Do not display fabricated GPU metrics or simulated performance
+improvements.
+
+============================================================ 4. MAIN
+FEATURES ============================================================
+
+A. IMAGE OBJECT DETECTION
+
+-   Accept common image formats such as JPG, JPEG and PNG.
+-   Validate file type and file size.
+-   Run a pretrained object-detection model.
+-   Draw bounding boxes around detected objects.
+-   Display class name and confidence score.
+-   Allow the user to adjust the confidence threshold.
+-   Display total detected-object count.
+-   Allow the annotated image to be downloaded.
+
+B. VIDEO OBJECT DETECTION
+
+-   Accept supported video formats such as MP4 and AVI.
+-   Read video frames using OpenCV.
+-   Run object detection on frames.
+-   Display or save an annotated output video.
+-   Display processing time and measured FPS.
+-   Handle corrupt, empty or unsupported video files gracefully.
+
+C. OBJECT TRACKING
+
+-   Track detected objects across consecutive frames.
+-   Assign tracking IDs where supported by the chosen tracker.
+-   Keep an object’s ID consistent while it remains trackable.
+-   Display tracking trails or IDs as a visual aid.
+-   Show object counts by class.
+-   Document that tracking can lose or change IDs when objects are
+    occluded or leave the scene.
+
+A supported tracker such as ByteTrack may be used if compatible with the
+selected model and library version. Keep tracking optional so that basic
+detection still works if tracking dependencies are unavailable.
+
+D. INFERENCE BENCHMARKING
+
+Provide a benchmark page that can compare configurations such as:
+
+-   PyTorch model on CPU.
+-   PyTorch model on CUDA, if a compatible NVIDIA GPU and CUDA-enabled
+    dependencies are available.
+-   ONNX Runtime on CPU.
+-   ONNX Runtime on CUDA, only if the required execution provider is
+    installed and available.
+-   Different input resolutions, for example 640x640, 480x480 and
+    320x320.
+-   Different model sizes, if the selected model family provides them.
+-   Supported precision modes, such as FP32, FP16 or INT8.
+
+Do not assume every combination is supported. Detect available hardware
+and runtime providers, then show only valid configurations. Clearly
+explain skipped configurations.
+
+E. BENCHMARK RESULTS
+
+For every benchmark run, record:
+
+-   Model name and version.
+-   Model file or exported artifact identifier.
+-   Runtime and runtime version.
+-   Execution provider: CPU or CUDA, where applicable.
+-   Precision or quantization mode.
+-   Input image dimensions.
+-   Batch size.
+-   Number of warm-up runs.
+-   Number of measured runs.
+-   Mean latency.
+-   Median latency.
+-   P95 latency, where enough samples exist.
+-   Throughput in images per second or frames per second.
+-   Peak memory measurement, if it can be measured reliably.
+-   Detection quality metric, if evaluated against labelled data.
+-   Hardware and software environment.
+-   Date and time of the run.
+
+Store raw measurements, not only the final averages. This allows results
+to be checked and recalculated.
+
+F. DASHBOARD
+
+The dashboard should contain:
+
+1.  Overview: Project description, hardware availability and quick
+    links.
+
+2.  Detection: Image upload, model selection, confidence threshold and
+    annotated result.
+
+3.  Video: Video upload, detection/tracking output and FPS information.
+
+4.  Benchmarks: Configuration selection, run controls, comparison tables
+    and charts.
+
+5.  Model and environment information: Available models, installed
+    runtimes, CPU information and GPU availability.
+
+6.  About: Explain the benchmark methodology, limitations and how to
+    reproduce experiments.
+
+============================================================ 5.
+TECHNICAL ARCHITECTURE
+============================================================
+
+Use a modular architecture. Avoid putting all application logic in one
+Python file.
+
+High-level flow:
+
+Image / Video / Webcam | v Input Validation and Frame Processing | v
+Model Interface | +——————————-+ | | v v PyTorch Inference ONNX Runtime
+Inference | | +—————+—————+ | v Detection Post-processing | v Optional
+Tracking | +———-+———-+ | | v v Annotated Media Metrics Collection | |
++———-+———-+ | v FastAPI Backend | v Streamlit Dashboard
+
+The benchmark runner should be a separate module. It should call the
+same model interface used by the application, so that benchmark
+measurements correspond to the actual inference implementation.
+
+IMPORTANT ARCHITECTURAL RULES:
+
+-   Separate model loading from individual prediction requests.
+-   Load a model once and reuse it where appropriate.
+-   Avoid reloading model weights for every video frame.
+-   Keep preprocessing, inference and post-processing measurements
+    distinguishable.
+-   Avoid mixing dashboard code with model execution logic.
+-   Keep CPU inference functional even when CUDA is unavailable.
+-   Make optional components fail gracefully.
+-   Do not silently change model precision or execution provider.
+
+============================================================ 6.
+RECOMMENDED TECHNOLOGY STACK
+============================================================
+
+Programming language: - Python 3.x. Choose a version compatible with the
+selected versions of PyTorch, Ultralytics and ONNX Runtime.
+
+Computer vision: - OpenCV for image/video reading, frame processing and
+drawing. - Ultralytics YOLO or another appropriately licensed pretrained
+detector for initial object detection.
+
+Deep learning: - PyTorch for loading and running the original model.
+
+Model export and inference: - ONNX for model exchange. - ONNX Runtime
+for running exported models. - ONNX Runtime execution providers should
+be detected at runtime.
+
+GPU acceleration: - CUDA for NVIDIA GPU acceleration. - Use a compatible
+PyTorch/CUDA and ONNX Runtime installation. - Do not assume CUDA is
+installed just because an NVIDIA GPU is present.
+
+Backend: - FastAPI for inference and benchmark endpoints. - Pydantic for
+request/response validation.
+
+Dashboard: - Streamlit for a straightforward interactive interface.
+
+Testing: - pytest for unit and integration tests.
+
+Packaging: - Docker for packaging the backend and its dependencies. -
+Treat GPU-enabled Docker as an optional advanced setup; it requires
+compatible host drivers and container support.
+
+Data and reports: - JSON or CSV for benchmark results. - Local
+filesystem storage for uploaded media and generated outputs during the
+first version.
+
+Version control: - Git and GitHub.
+
+Keep the first version simple. Do not add Kubernetes, complex cloud
+infrastructure, a distributed task queue or a microservice architecture
+unless a real requirement emerges.
+
+============================================================ 7.
+IMPORTANT CONCEPTS TO UNDERSTAND
+============================================================
+
+A. COMPUTER VISION
+
+Computer Vision is the area of AI concerned with enabling computers to
+interpret images and videos.
+
+Object detection: The model predicts what objects are present and where
+they are located. A detection usually contains: - Class label. -
+Confidence score. - Bounding-box coordinates.
+
+Object tracking: Tracking associates detections across consecutive video
+frames. It attempts to maintain an identity for the same object over
+time.
+
+Image preprocessing: Before inference, an image may need resizing, color
+conversion, normalization and tensor conversion. The exact process
+depends on the model.
+
+Post-processing: The model outputs are converted into usable detections.
+This may include confidence filtering and non-maximum suppression.
+
+B. TRAINING VS INFERENCE
+
+Training: The model learns from training data by updating its
+parameters.
+
+Inference: The already-trained model processes new input and produces
+predictions.
+
+This project focuses on inference and deployment, not training a new
+model from scratch.
+
+C. INFERENCE METRICS
+
+Latency: The time required to process an input. Report units clearly,
+usually milliseconds per image or frame.
+
+Throughput: The number of inputs processed per unit of time. Report
+images per second or frames per second.
+
+FPS: Frames processed per second. State whether it measures model
+inference only or the complete video pipeline.
+
+Mean latency: The arithmetic average of measured latency samples.
+
+Median latency: The middle latency value. It is less sensitive to
+unusually slow samples than the mean.
+
+P95 latency: The latency below which 95 percent of measured requests
+complete. Use enough samples for this statistic to be meaningful.
+
+Memory: Report CPU RAM and GPU VRAM separately when available. Explain
+how the measurement was collected.
+
+Accuracy: A speed improvement is not useful if predictions become
+unacceptably inaccurate. Use a labelled evaluation dataset for formal
+accuracy comparisons.
+
+D. OPTIMIZATION TECHNIQUES
+
+1.  Input resolution: Smaller input images often require less
+    computation, but small objects may become harder to detect.
+
+2.  Runtime comparison: Compare the original PyTorch implementation with
+    ONNX Runtime using equivalent inputs and equivalent measurement
+    procedures.
+
+3.  Precision: FP32 uses 32-bit floating-point values; FP16 uses 16-bit
+    floating-point values. INT8 uses 8-bit integer representations.
+    Actual support and speed depend on hardware, operators and runtime.
+
+4.  Quantization: Quantization represents model values using lower
+    precision. It can reduce model size and sometimes improve inference
+    speed, but may affect detection quality.
+
+5.  Batching: Processing multiple inputs together can improve
+    throughput, but can increase latency and memory use. For live video,
+    batching may introduce waiting time.
+
+6.  Warm-up: Initial runs may include one-time setup costs. Run warm-up
+    iterations before collecting benchmark measurements.
+
+7.  Repeated measurements: Run multiple trials, report the number of
+    runs and use consistent input data and conditions.
+
+Do not claim that FP16, INT8, ONNX or GPU is always faster. Measure each
+supported configuration on the actual hardware.
+
+E. MODEL DEPLOYMENT
+
+Deployment means making the model usable by an application or another
+system.
+
+FastAPI: Provides HTTP endpoints such as: - GET /health - GET
+/system-info - POST /predict/image - POST /predict/video, if implemented
+safely for the chosen video workflow - POST /benchmark - GET
+/benchmark/{run_id}
+
+The API should validate inputs, return structured results and provide
+useful error messages.
+
+Docker: Packages application code and dependencies into a reproducible
+container. Docker does not automatically provide GPU access; GPU support
+requires compatible host configuration.
+
+ONNX: A portable representation of a model. Exporting to ONNX does not
+guarantee identical outputs or faster execution. Validate the exported
+model against the original model.
+
+ONNX Runtime: Executes ONNX models using available execution providers,
+such as CPU or CUDA where supported.
+
+CUDA: A platform for general-purpose GPU computing on supported NVIDIA
+hardware. It is not the same thing as PyTorch, ONNX or ONNX Runtime.
+
+============================================================ 8. FAIR
+BENCHMARKING METHODOLOGY
+============================================================
+
+A benchmark is only useful if the comparison is fair.
+
+Use this procedure:
+
+1.  Select a fixed set of test images or video frames.
+2.  Use the same source inputs for every configuration.
+3.  Confirm that preprocessing and output handling are equivalent.
+4.  Run warm-up iterations.
+5.  Run a fixed number of measured iterations.
+6.  Record each measurement.
+7.  Calculate mean, median and P95 latency where appropriate.
+8.  Calculate throughput from measured processing time.
+9.  Record memory usage where reliable.
+10. Compare detection quality using labelled data when making accuracy
+    claims.
+11. Record hardware, software versions and configuration.
+12. Repeat experiments if results appear unstable.
+
+For CPU vs GPU comparisons: - Use the same model and input dimensions. -
+Make sure the GPU run really uses CUDA. - Record the GPU model and
+driver/runtime information. - Do not compare a warm GPU run against a
+cold CPU run. - Do not present results from different machines as if
+they were a controlled comparison.
+
+For quantization: - Compare the original and quantized model on the same
+evaluation inputs. - Measure both speed and quality. - Document the
+quantization method and calibration data where relevant.
+
+For video: - Report model-only inference FPS separately from end-to-end
+pipeline FPS. - End-to-end time can include frame decoding,
+preprocessing, inference, tracking, drawing and encoding.
+
+============================================================ 9. PROPOSED
+REPOSITORY STRUCTURE
+============================================================
+
+A possible structure:
+
+EdgeAI/ | |– app/ | |– main.py | |– pages/ | | |– overview.py | | |–
+detection.py | | |– video.py | | |– benchmarks.py | | |– system_info.py
+| |– backend/ | |– main.py | |– routes/ | | |– health.py | | |–
+inference.py | | |– benchmark.py | |– schemas/ | |– services/ | |– core/
+| |– model_loader.py | |– inference.py | |– preprocessing.py | |–
+postprocessing.py | |– tracking.py | |– device_manager.py | |–
+optimization/ | |– export_onnx.py | |– quantization.py | |–
+runtime_manager.py | |– benchmarking/ | |– runner.py | |– metrics.py |
+|– comparison.py | |– report.py | |– tests/ |– sample_data/ |– outputs/
+|– benchmark_results/ |– scripts/ |– docs/ |– requirements.txt |–
+.env.example |– .gitignore |– Dockerfile |– README.md
+
+This is a suggested structure, not a requirement to create every file
+immediately. Start with the smallest working structure and add modules
+as features are implemented.
+
+Never commit: - API keys. - Passwords. - Private tokens. - Personal
+data. - Large generated model files unless there is a clear reason and
+the repository strategy supports them. - Large unlicensed datasets or
+media.
+
+============================================================ 10.
+DEVELOPMENT PHASES
+============================================================
+
+PHASE 0 - PROJECT DISCOVERY AND DESIGN
+
+-   Check available CPU, RAM and GPU.
+-   Check whether an NVIDIA GPU is available.
+-   Check driver and CUDA compatibility if applicable.
+-   Select a small pretrained detection model.
+-   Check model and library licensing before distributing the project.
+-   Write down the first-version requirements.
+-   Create the repository and initial README.
+
+Deliverable: A documented project plan and a working development
+environment.
+
+PHASE 1 - BASIC COMPUTER VISION
+
+-   Load a pretrained object-detection model.
+-   Run inference on one image.
+-   Draw bounding boxes and confidence scores.
+-   Add confidence-threshold control.
+-   Save annotated output.
+-   Add unit tests for input validation and result formatting.
+
+Deliverable: A working image-detection module.
+
+PHASE 2 - VIDEO AND TRACKING
+
+-   Read video frames using OpenCV.
+-   Run detection on frames.
+-   Add an optional object tracker.
+-   Draw tracking IDs.
+-   Calculate video processing FPS.
+-   Save an annotated video.
+-   Handle invalid videos and resource cleanup.
+
+Deliverable: A working video detection and tracking pipeline.
+
+PHASE 3 - BENCHMARK FRAMEWORK
+
+-   Add warm-up runs.
+-   Add repeated measurements.
+-   Record per-run latency.
+-   Calculate mean, median and P95 latency.
+-   Calculate throughput.
+-   Record environment details.
+-   Save results as JSON or CSV.
+-   Add a baseline PyTorch CPU benchmark.
+
+Deliverable: A reproducible CPU benchmark.
+
+PHASE 4 - MODEL EXPORT AND RUNTIME COMPARISON
+
+-   Export the model to ONNX.
+-   Validate ONNX predictions against PyTorch predictions.
+-   Add ONNX Runtime CPU inference.
+-   Compare latency and throughput.
+-   Add CUDA execution only if compatible hardware and runtime providers
+    are available.
+
+Deliverable: A tested PyTorch vs ONNX Runtime comparison.
+
+PHASE 5 - OPTIMIZATION EXPERIMENTS
+
+-   Compare input resolutions.
+-   Explore supported FP16 execution.
+-   Explore INT8 quantization if supported by the selected
+    model/runtime.
+-   Compare model size, latency, throughput and detection quality.
+-   Document unsupported combinations.
+-   Avoid claiming a speedup without measurements.
+
+Deliverable: A benchmark report with measured trade-offs.
+
+PHASE 6 - API AND DASHBOARD
+
+-   Create FastAPI endpoints.
+-   Add health and system-information endpoints.
+-   Add image inference endpoint.
+-   Add benchmark endpoint.
+-   Build a Streamlit dashboard.
+-   Show predictions and benchmark charts.
+-   Add clear loading and error states.
+
+Deliverable: A usable local application.
+
+PHASE 7 - TESTING AND PACKAGING
+
+-   Add unit tests.
+-   Add API integration tests.
+-   Test invalid files and unavailable hardware.
+-   Add structured logging.
+-   Add Docker support for CPU deployment.
+-   Document optional GPU setup separately.
+-   Verify a clean installation from the README instructions.
+
+Deliverable: A reproducible project that another developer can run.
+
+PHASE 8 - FINAL EVALUATION AND PRESENTATION
+
+-   Run the complete benchmark suite.
+-   Save raw benchmark data.
+-   Generate comparison charts.
+-   Document machine specifications.
+-   Explain accuracy/performance trade-offs.
+-   Add screenshots and a short demo video.
+-   Write a concise architecture explanation.
+-   Document limitations honestly.
+
+Deliverable: A portfolio-ready GitHub repository.
+
+============================================================ 11. TESTING
+REQUIREMENTS
+============================================================
+
+At minimum, test:
+
+-   Valid image input.
+-   Invalid image format.
+-   Empty or corrupt image.
+-   Valid video input.
+-   Invalid video input.
+-   No-object detection result.
+-   Multiple-object detection result.
+-   Model unavailable or failed to load.
+-   CUDA unavailable.
+-   ONNX Runtime provider unavailable.
+-   Invalid confidence threshold.
+-   Benchmark with zero or invalid iterations.
+-   API error responses.
+-   Output file creation and cleanup.
+
+The application must continue to work in CPU mode if GPU acceleration is
+unavailable.
+
+============================================================ 12.
+ACCEPTANCE CRITERIA
+============================================================
+
+The first complete version is considered successful when:
+
+1.  A user can upload an image and receive annotated detections.
+2.  A user can upload a video and receive an annotated output.
+3.  Tracking IDs work on supported video inputs.
+4.  The system reports measured latency and FPS.
+5.  Benchmark runs are repeatable and their configuration is saved.
+6.  At least two valid inference configurations can be compared.
+7.  PyTorch and ONNX outputs have been checked for reasonable
+    consistency.
+8.  Unsupported GPU or precision options are clearly disabled or
+    explained.
+9.  FastAPI endpoints return structured results and errors.
+10. The dashboard displays predictions and benchmark results.
+11. Tests pass on a clean CPU environment.
+12. README setup instructions work for another developer.
+
+Do not make the project artificially large. A smaller implementation
+that satisfies these criteria is better than many incomplete features.
+
+============================================================ 13. HOW TO
+USE CODEX EFFECTIVELY
+============================================================
+
+Do not ask Codex to build the entire project in one prompt.
+
+Use a staged workflow.
+
+STEP 1 - PLANNING
+
+Prompt:
+
+“Read the complete project specification in docs/PROJECT_SPEC.txt.
+Inspect my development environment and repository. Do not write
+implementation code yet. Identify hardware constraints, dependency
+compatibility risks, licensing considerations and a minimal
+architecture. Return a phased implementation plan with files to create
+and test commands.”
+
+STEP 2 - IMPLEMENT ONE PHASE
+
+Prompt:
+
+“Implement only Phase 1 from docs/PROJECT_SPEC.txt. First inspect the
+existing repository. Keep the code modular. Do not implement future
+phases. Add tests, run them, fix failures and summarize every changed
+file.”
+
+STEP 3 - REVIEW
+
+Prompt:
+
+“Review the current changes against docs/PROJECT_SPEC.txt. Look for
+correctness bugs, hidden assumptions, missing validation, resource
+leaks, dependency problems and untested edge cases. Do not change files
+until you present the findings and proposed fixes.”
+
+STEP 4 - TEST
+
+Prompt:
+
+“Run the relevant tests and a small real inference smoke test. Do not
+fabricate successful results. If a dependency or hardware capability is
+unavailable, report it clearly and test the supported CPU path.”
+
+STEP 5 - CONTINUE
+
+Only after the current phase works, ask Codex to implement the next
+phase.
+
+STEP 6 - BEFORE PUSHING TO GITHUB
+
+Prompt:
+
+“Review the complete Git diff. Check for secrets, local paths, large
+generated files, model weights, unnecessary dependencies and broken
+documentation. Run tests. Do not commit or push until I review and
+approve the changes.”
+
+IMPORTANT RULES:
+
+-   Keep Git commits small and phase-specific.
+-   Review generated code rather than blindly accepting it.
+-   Run the application after major changes.
+-   Ask Codex to explain unfamiliar code.
+-   Never paste API keys into source files or prompts.
+-   Keep a .env.example with placeholder variable names only.
+-   Add .env, local outputs and temporary files to .gitignore.
+-   Do not let the coding agent silently replace the entire
+    architecture.
+-   Ask it to report commands it ran and their actual results.
+
+============================================================ 14. RISKS
+AND LIMITATIONS
+============================================================
+
+Hardware: GPU benchmarking requires suitable hardware and compatible
+software. If no NVIDIA GPU is available, develop and benchmark CPU
+inference locally. Use a temporary notebook GPU only if a suitable free
+service is available, and record that environment separately.
+
+Free cloud resources: Free GPU notebooks have usage limits and
+availability can change. The project should not depend on continuous
+free GPU access.
+
+Quantization: INT8 support is model- and runtime-dependent. Quantization
+may require representative calibration data. A quantized model may be
+slower on hardware without suitable acceleration.
+
+ONNX: Not every model operation exports cleanly. Validate output
+equivalence after export. ONNX export is not itself an optimization
+guarantee.
+
+Video: Real-time webcam performance depends on camera, CPU/GPU, frame
+size and processing pipeline. Report actual measured FPS.
+
+Licensing: Check the current license of the selected pretrained model,
+its weights, datasets and dependencies before redistributing them or
+using them commercially. Keep a note of the model source and license in
+the repository.
+
+Security: Validate uploaded files, set upload-size limits, avoid
+trusting filenames, use safe temporary-file handling and do not expose
+internal server paths in error responses.
+
+============================================================ 15. WHAT
+MAKES THIS PROJECT RESUME-WORTHY?
+============================================================
+
+A basic object-detection demo is not enough to distinguish this project.
+
+The strongest evidence will be:
+
+-   A modular inference pipeline.
+-   Working PyTorch and ONNX Runtime implementations.
+-   Correct CPU/GPU capability detection.
+-   Reproducible benchmarks.
+-   Quantitative speed, throughput and memory comparisons.
+-   Accuracy checks alongside performance measurements.
+-   An API that serves real model predictions.
+-   Tests and reliable error handling.
+-   A clear README with architecture, setup instructions and measured
+    results.
+
+Do not invent performance numbers. Only publish values obtained from
+actual benchmark runs, with the hardware and software environment
+documented.
+
+Potential resume description after the work is genuinely complete:
+
+“Developed EdgeAI, a real-time computer-vision inference platform for
+object detection and tracking, with PyTorch and ONNX Runtime backends,
+FastAPI model serving, and reproducible benchmarks comparing latency,
+throughput, memory usage and detection quality across supported
+inference configurations.”
+
+Edit this description to match the features that are actually
+implemented.
+
+============================================================ 16. FINAL
+BUILD PRIORITIES
+============================================================
+
+If time is limited, prioritize in this order:
+
+MUST HAVE: - Image detection. - Video detection. - Basic object
+tracking. - Reliable latency and FPS measurement. - Benchmark result
+storage. - PyTorch baseline. - ONNX Runtime comparison. - FastAPI
+endpoint. - Simple dashboard. - Tests and README.
+
+SHOULD HAVE: - CPU vs CUDA comparison when hardware permits. -
+Resolution comparison. - FP16 or INT8 experiment when supported. -
+Accuracy evaluation on labelled data. - Docker CPU deployment.
+
+OPTIONAL: - Webcam streaming. - Advanced tracker comparisons. - Multiple
+model families. - More advanced quantization methods. - Remote/cloud
+deployment. - Automated benchmark report generation.
+
+Do not start optional features until the must-have features work.
+
+FINAL PRINCIPLE:
+
+Build a measurable engineering system, not just a visually impressive AI
+demo.
+
+The project’s value comes from showing that you understand how a model
+is executed, how its performance is measured, how optimizations affect
+quality and speed, and how to expose the model through a reliable
+application.
