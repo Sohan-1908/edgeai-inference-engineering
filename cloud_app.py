@@ -520,20 +520,20 @@ if upload:
                 st.subheader("Detection details")
 
                 if detections:
-                    rows = [
-                        {
-                            "Class": d["class"],
-                            "Confidence": round(d["confidence"], 3),
-                            "Bounding Box": ", ".join(f"{v:.1f}" for v in d["box"]),
-                        }
-                        for d in detections
-                    ]
+                    for index, detection in enumerate(detections, start=1):
+                        x1, y1, x2, y2 = detection["box"]
 
-                    # Use st.table instead of st.dataframe.
-                    # This avoids the DataFrame frontend component.
+                        st.markdown(
+                            f"""
+                            **Detection {index} — {detection["class"]}**
 
-                    st.table(rows)
+                            Confidence: `{detection["confidence"]:.3f}`
 
+                            Bounding Box: `({x1:.1f}, {y1:.1f}, {x2:.1f}, {y2:.1f})`
+
+                            ---
+                            """
+                        )
                 else:
                     st.info("No objects detected above this threshold.")
 
