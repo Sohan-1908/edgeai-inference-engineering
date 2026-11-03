@@ -1,0 +1,22 @@
+# Project environment: Python 3.12 on Windows.
+# CUDA-enabled PyTorch wheels are served from the official PyTorch index.
+--extra-index-url https://download.pytorch.org/whl/cu130
+
+torch==2.14.0+cu130
+torchvision==0.29.0+cu130
+opencv-python==5.0.0.93
+ultralytics==8.4.197
+lap==0.5.13
+onnx==1.23.0
+onnxconverter-common==1.16.0
+psutil==7.2.2
+# Stable CUDA 13.0 / cuDNN 9 build compatible with the project's PyTorch cu130.
+onnxruntime-gpu==1.30.0
+fastapi==0.162.0
+uvicorn==0.54.0
+python-multipart==0.0.33
+# Used by FastAPI TestClient in automated API tests (Starlette's current client transport).
+httpx2==2.15.1
+# Streamlit is a frontend only; requests calls the existing FastAPI service.
+streamlit==1.66.1
+requests==2.34.2
