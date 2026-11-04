@@ -1,84 +1,130 @@
 # EdgeAI Architecture
 
-EdgeAI has two implemented execution paths: a local CLI path and an HTTP service path. They share detector, media-processing, tracking, and annotation code. The Streamlit dashboard is only an HTTP client; it does not initialize models or run inference.
+EdgeAI contains three inference entry paths and a separate model-optimization workflow. The production/default detector selection is not changed by the experimental FP16, QDQ INT8, or QOperator artifacts.
 
-## Component diagram
-
-```mermaid
-flowchart TB
-    subgraph Local["Local CLI path"]
-        Input["Image / video file"] --> CLI["main.py"]
-        Camera["Webcam"] --> CLI
-        CLI --> Select["Runtime and device selection"]
-        Select --> Torch["ImageDetector: Ultralytics / PyTorch"]
-        Select --> ORT["OnnxDetector: ONNX Runtime"]
-        Torch --> Result["Detection results"]
-        ORT --> Result
-        Result --> Track{"Video or webcam tracking requested?"}
-        Track -->|"PyTorch only"| ByteTrack["ByteTrackSession"]
-        Track -->|"No"| Annotate["Annotation / output writer"]
-        ByteTrack --> Annotate
-        Annotate --> LocalOutput["Local annotated image / video"]
-    end
-
-    subgraph Service["FastAPI + Streamlit service path"]
-        Browser["User browser"] <--> UI["app.py: Streamlit dashboard"]
-        UI -->|"HTTP upload"| Client["edgeai/api_client.py"]
-        Client -->|"HTTP"| API["edgeai/api.py: FastAPI"]
-        API --> TorchAPI["ImageDetector: PyTorch CUDA"]
-        API --> ORTAPI["OnnxDetector: strict ONNX CUDA"]
-        TorchAPI --> Pipeline["Shared detection / video pipeline"]
-        ORTAPI --> Pipeline
-        Pipeline -->|"optional PyTorch video tracking"| Tracker["ByteTrackSession"]
-        Tracker --> Pipeline
-        Pipeline --> Response["JSON image response / streamed annotated video"]
-        Response --> API
-        API --> Client
-        Client --> UI
-    end
-
-    subgraph Artifacts["Model artifacts"]
-        Checkpoint["YOLO11n checkpoint"]
-        Export["Fixed-shape ONNX exports"]
-    end
-    Checkpoint --> Torch
-    Export --> ORT
-    Checkpoint --> TorchAPI
-    Export --> ORTAPI
-```
-
-## Ownership and boundaries
-
-- **CLI (`main.py`)** selects local file, webcam, export, and benchmark workflows. It chooses the configured PyTorch or ONNX detector where the selected mode supports it.
-- **PyTorch detector (`edgeai/detector.py`)** wraps the Ultralytics model. CUDA inference is synchronized around the prediction call for timing.
-- **ONNX detector (`edgeai/onnx_detector.py`)** performs the project's ONNX preprocessing and decoding around an ONNX Runtime session. Strict CUDA initialization verifies `CUDAExecutionProvider`; other CLI modes can support CPU depending on options.
-- **Video pipeline (`edgeai/video.py`)** reads and processes frames, calls the existing detector, optionally updates ByteTrack, annotates frames, and writes the output video.
-- **Tracking (`edgeai/tracking.py`)** wraps Ultralytics ByteTrack for a per-video PyTorch tracking session. ONNX tracking is rejected.
-- **FastAPI (`edgeai/api.py`)** initializes one CUDA detector during application lifespan, validates requests, runs inference off the event loop, and returns JSON or streamed video. It does not provide a CPU fallback.
-- **Streamlit (`app.py`)** uses the reusable requests-based client in `edgeai/api_client.py` to query health/configuration and submit image/video uploads.
-- **Docker configuration** describes separate API and dashboard services. It requires a working engine and NVIDIA GPU access for API inference; container execution has not been validated in the latest audit.
-
-## Service data flow
+## System overview
 
 ```mermaid
-sequenceDiagram
-    participant U as Browser
-    participant S as Streamlit
-    participant C as API client
-    participant F as FastAPI
-    participant D as Detector / video pipeline
-    U->>S: Select media and submit
-    S->>C: Build HTTP request
-    C->>F: Upload image or video
-    F->>D: Decode, infer, optionally track
-    D-->>F: Detections or annotated video + metrics
-    F-->>C: JSON or video bytes + metadata
-    C-->>S: Parsed response
-    S-->>U: Render detections / download result
+flowchart LR
+    subgraph Inputs["Inference inputs"]
+        Image["Image file / upload"]
+        Video["Video file / upload"]
+        Webcam["Local webcam"]
+    end
+
+    subgraph Local["Local CLI inference"]
+        CLI["main.py"]
+        Pre["Decode and preprocess"]
+        Runtime{"Selected CLI runtime"}
+        Torch["Ultralytics YOLO11n / PyTorch"]
+        ONNX["OnnxDetector / ONNX Runtime"]
+        CUDA["CUDA device"]
+        CPU["CPUExecutionProvider"]
+        Post["Detection postprocessing"]
+        Tracking["Optional ByteTrack<br/>PyTorch video/webcam only"]
+        Annotate["Annotate and write media"]
+        Result["Detection records<br/>Annotated image / video"]
+
+        Image --> CLI
+        Video --> CLI
+        Webcam --> CLI
+        CLI --> Pre --> Runtime
+        Runtime --> Torch
+        Runtime --> ONNX
+        Torch --> CUDA
+        ONNX --> CUDA
+        ONNX --> CPU
+        CUDA --> Post
+        CPU --> Post
+        Post --> Tracking
+        Tracking --> Annotate
+        Annotate --> Result
+    end
+
+    subgraph ApiPath["API-backed local deployment"]
+        Browser["Browser<br/>image / video upload"]
+        Dashboard["app.py<br/>Streamlit HTTP client"]
+        Client["edgeai/api_client.py"]
+        API["edgeai/api.py<br/>FastAPI (CUDA required)"]
+        ApiDetector{"API runtime configuration"}
+        ApiTorch["PyTorch FP32"]
+        ApiONNX["Strict ONNX Runtime FP32"]
+        ApiPost["Shared image/video processing"]
+        ApiResponse["JSON detections and timings<br/>or annotated video stream"]
+
+        Browser <--> Dashboard
+        Dashboard --> Client --> API --> ApiDetector
+        ApiDetector --> ApiTorch
+        ApiDetector --> ApiONNX
+        ApiTorch --> CUDA
+        ApiONNX --> CUDA
+        CUDA --> ApiPost
+        ApiPost --> ApiResponse --> API
+        API --> Client --> Dashboard
+    end
+
+    subgraph CloudDemo["Standalone CPU-only demo"]
+        CloudUI["cloud_app.py<br/>Streamlit"]
+        CloudModel["models/yolo11n.onnx"]
+        CloudORT["ONNX Runtime<br/>CPUExecutionProvider"]
+        CloudOutput["Annotated image and<br/>inference details"]
+        CloudUI --> CloudModel --> CloudORT --> CloudOutput
+    end
+
+    subgraph Optimization["Separate optimization and measurement path"]
+        FP32["FP32 ONNX"]
+        FP16["FP16 ONNX<br/>experimental CUDA"]
+        QDQ["Static QDQ INT8<br/>CPU experiment"]
+        QOp["QOperator INT8<br/>separate CPU experiment"]
+        Bench["Benchmark runners"]
+        Profile["ORT profiling and<br/>graph diagnostics"]
+        Compare["Model size, latency,<br/>stage and detection comparisons"]
+
+        FP32 --> FP16
+        FP32 --> QDQ
+        FP32 --> QOp
+        FP32 --> Bench
+        FP16 --> Bench
+        QDQ --> Bench
+        QOp --> Bench
+        FP32 --> Profile
+        QDQ --> Profile
+        QOp --> Profile
+        Bench --> Compare
+        Profile --> Compare
+    end
 ```
 
-For image requests, the API returns structured detections and timing fields; the annotated JPEG is optional and base64-encoded. For video requests, annotated bytes are streamed and processing metadata is serialized in the `X-EdgeAI-Metadata` header. Temporary video files are request-scoped and cleaned after completion or failure.
+## Verified execution paths
 
-## Runtime constraints
+### Local CLI
 
-The API supports PyTorch FP32 or strict CUDA ONNX FP32, requires CUDA, and verifies the active device/provider at startup. The CLI has broader CPU support for file inference. Fixed-shape ONNX models are provided for 640, 480, and 320 input sizes; the selected model must match the requested size. See [API configuration](API.md) and the [setup and reproduction guide](setup_and_reproduction.md).
+`main.py` accepts image, video, webcam, export, conversion, quantization, and benchmark modes. The local image/video path can select the PyTorch detector or ONNX Runtime, and the ONNX session can execute on CPU or CUDA where the selected precision supports it. ONNX models have fixed input shapes; the model resolution and requested input size must match.
+
+The ONNX detector performs its own letterbox preprocessing and output decoding. The PyTorch detector delegates model preprocessing/execution/postprocessing to Ultralytics. Both paths produce EdgeAI detection records and annotated media. ByteTrack is integrated for PyTorch video and webcam flows; ONNX tracking is rejected.
+
+### FastAPI and local Streamlit dashboard
+
+`edgeai/api.py` initializes a CUDA detector during service lifespan. Configurable API runtimes are PyTorch FP32 or strict CUDA ONNX FP32. The service does not provide CPU fallback. Image inference is returned as structured JSON, with optional annotated image data. Video inference streams annotated bytes and includes processing metadata in the `X-EdgeAI-Metadata` header.
+
+`app.py` is an HTTP-only frontend. It uses `edgeai/api_client.py` to query health/configuration and submit image/video uploads. It does not import the inference engine to run detection or load model files. The API controls runtime selection; the dashboard does not select runtime per request. ByteTrack is available only when the API backend is configured for PyTorch.
+
+### Standalone CPU cloud demo
+
+`cloud_app.py` is a separate Streamlit application that loads `models/yolo11n.onnx` directly and explicitly uses `CPUExecutionProvider`. It is not the `app.py` dashboard, does not call FastAPI, and does not provide local CUDA execution. Hosted deployment was not validated.
+
+### Experimental optimization path
+
+FP32 ONNX is the source artifact for two separate paths:
+
+- FP16 conversion keeps public model I/O in FP32, is intended for strict ONNX Runtime CUDA execution, and writes a separate artifact.
+- Static QDQ INT8 uses calibration and quantizes selected Conv nodes; other operations and selected excluded regions remain floating point. Its tested execution path is ONNX Runtime CPU.
+- QOperator INT8 is an isolated experiment. In the recorded experiment, the optimized graph retained 56 `QLinearConv` nodes and 32 floating-point `Conv` nodes, and profiling observed `QLinearConv` on `CPUExecutionProvider`. The model was slower in that run; its existence is not evidence of a production speedup.
+
+Benchmark runners measure different scopes (model execution, full detector call, and video processing). Operator-profiled timings are kept separate from unprofiled benchmark latency because profiling adds overhead.
+
+## Deployment and validation status
+
+The repository includes separate API and dashboard Dockerfiles and a Compose configuration that requests an NVIDIA GPU for the API. Docker build/runtime behavior and NVIDIA container access remain unvalidated. The API-backed local deployment requires CUDA; the standalone CPU cloud app is a separate demonstration, not an equivalent substitute.
+
+See the [inference pipeline](inference_pipeline.md), [API guide](API.md), [dashboard guide](DASHBOARD.md), [setup and reproduction notes](setup_and_reproduction.md), and [benchmark findings](benchmark_results.md) for additional detail.

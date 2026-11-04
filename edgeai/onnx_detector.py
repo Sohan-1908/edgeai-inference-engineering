@@ -17,7 +17,12 @@ import onnxruntime as ort
 
 from edgeai.config import DEFAULT_CONFIDENCE, DEFAULT_MEASURED_RUNS, DEFAULT_WARMUP_RUNS
 from edgeai.detector_types import Detection, DetectionRun, PerformanceMetrics
-from edgeai.errors import DeviceUnavailableError, ImageInputError, InferenceError, ModelLoadError
+from edgeai.errors import (
+    DeviceUnavailableError,
+    ImageInputError,
+    InferenceError,
+    ModelLoadError,
+)
 from edgeai.image_io import load_image
 from edgeai.onnx_export import DEFAULT_ONNX_PATH, INPUT_SIZE
 from edgeai.postprocess import annotate_image, output_image_path, save_annotated_image
@@ -49,7 +54,9 @@ def _letterbox(image: np.ndarray, size: int) -> tuple[np.ndarray, float, int, in
     scale = min(size / height, size / width)
     resized_width = int(round(width * scale))
     resized_height = int(round(height * scale))
-    resized = cv2.resize(image, (resized_width, resized_height), interpolation=cv2.INTER_LINEAR)
+    resized = cv2.resize(
+        image, (resized_width, resized_height), interpolation=cv2.INTER_LINEAR
+    )
     pad_width = size - resized_width
     pad_height = size - resized_height
     left = int(round(pad_width / 2 - 0.1))
@@ -62,7 +69,9 @@ def _letterbox(image: np.ndarray, size: int) -> tuple[np.ndarray, float, int, in
     return padded, scale, left, top
 
 
-def prepare_onnx_input(image: np.ndarray, size: int = INPUT_SIZE) -> tuple[np.ndarray, float, int, int]:
+def prepare_onnx_input(
+    image: np.ndarray, size: int = INPUT_SIZE
+) -> tuple[np.ndarray, float, int, int]:
     """Use the identical letterbox, RGB conversion, layout, and normalization for all runtimes."""
     if size not in {320, 480, 640}:
         raise ValueError("ONNX input size must be one of 320, 480, or 640")
@@ -97,10 +106,14 @@ def _decode_yolo_output(
     prediction = np.asarray(output, dtype=np.float32)
     if prediction.ndim == 3:
         if prediction.shape[0] != 1:
-            raise ValueError(f"Expected batch size 1, got output shape {prediction.shape}")
+            raise ValueError(
+                f"Expected batch size 1, got output shape {prediction.shape}"
+            )
         prediction = prediction[0]
     if prediction.ndim != 2:
-        raise ValueError(f"Expected a rank-2 YOLO output after removing batch, got {prediction.shape}")
+        raise ValueError(
+            f"Expected a rank-2 YOLO output after removing batch, got {prediction.shape}"
+        )
     feature_count = 4 + len(names) if names else None
     if feature_count is not None and prediction.shape[0] == feature_count:
         prediction = prediction.T
@@ -134,7 +147,9 @@ def _decode_yolo_output(
                 break
             order = rest[_box_iou(boxes[current], boxes[rest]) <= iou_threshold]
     if len(selected) > MAX_DETECTIONS:
-        selected = sorted(selected, key=lambda index: float(scores[index]), reverse=True)[:MAX_DETECTIONS]
+        selected = sorted(
+            selected, key=lambda index: float(scores[index]), reverse=True
+        )[:MAX_DETECTIONS]
 
     detections = []
     for index in selected:
@@ -155,15 +170,21 @@ def _decode_yolo_output(
     return detections
 
 
-def _as_ultralytics_result(detections: list[Detection], names: dict[int, str], runtime_ms: float):
+def _as_ultralytics_result(
+    detections: list[Detection], names: dict[int, str], runtime_ms: float
+):
     boxes = _DetectionBoxes(detections)
     return SimpleNamespace(boxes=boxes, names=names, speed={"inference": runtime_ms})
 
 
 class _DetectionBoxes:
     def __init__(self, detections: list[Detection]):
-        self.xyxy = np.asarray([item.bbox_xyxy for item in detections], dtype=np.float32).reshape(-1, 4)
-        self.conf = np.asarray([item.confidence for item in detections], dtype=np.float32)
+        self.xyxy = np.asarray(
+            [item.bbox_xyxy for item in detections], dtype=np.float32
+        ).reshape(-1, 4)
+        self.conf = np.asarray(
+            [item.confidence for item in detections], dtype=np.float32
+        )
         self.cls = np.asarray([item.class_id for item in detections], dtype=np.float32)
         self.id = None
 
@@ -184,7 +205,15 @@ class OnnxDetector:
         cpu_threads: int = 4,
         precision: str = "fp32",
         require_cuda: bool = False,
+        profile: bool = False,
+        profile_file_prefix: str | Path | None = None,
     ):
+        self.require_cuda = require_cuda
+        self.profile = profile
+        self.profile_file_prefix = (
+            str(profile_file_prefix) if profile_file_prefix is not None else None
+        )
+        self._profiling_ended = False
         self.model_path = Path(model_path).expanduser().resolve()
         self.inference_lock = RLock()
         if not self.model_path.is_file():
@@ -198,24 +227,38 @@ class OnnxDetector:
         if precision == "fp16" and not require_cuda:
             raise ValueError("FP16 ONNX inference requires strict CUDA execution.")
         if precision == "int8" and device != "cpu":
-            raise ValueError("INT8 benchmark inference is CPU-only in this phase; select device='cpu'.")
+            raise ValueError(
+                "INT8 benchmark inference is CPU-only in this phase; select device='cpu'."
+            )
         if require_cuda and device != "cuda":
-            raise DeviceUnavailableError("Strict CUDA execution requires device='cuda'.")
+            raise DeviceUnavailableError(
+                "Strict CUDA execution requires device='cuda'."
+            )
         self.requested_device = device
         self.precision = precision.upper()
         self.require_cuda = require_cuda
         self.model_name = self.model_path.name
         self.model_size_bytes = self.model_path.stat().st_size
-        self.last_timings = {"preprocess_ms": 0.0, "runtime_ms": 0.0, "postprocess_ms": 0.0}
+        self.last_timings = {
+            "preprocess_ms": 0.0,
+            "runtime_ms": 0.0,
+            "postprocess_ms": 0.0,
+        }
         self.fallback_error: str | None = None
         self._cpu_threads = cpu_threads
 
         started = perf_counter()
         self.session = self._create_session(device)
         self.model_load_ms = (perf_counter() - started) * 1000.0
-        self.device = "cuda:0" if self.session.get_providers()[0] == "CUDAExecutionProvider" else "cpu"
+        self.device = (
+            "cuda:0"
+            if self.session.get_providers()[0] == "CUDAExecutionProvider"
+            else "cpu"
+        )
         self.execution_provider = self.session.get_providers()[0]
-        self.runtime_name = "onnxruntime-gpu" if self.device == "cuda:0" else "onnxruntime"
+        self.runtime_name = (
+            "onnxruntime-gpu" if self.device == "cuda:0" else "onnxruntime"
+        )
         self.runtime_version = ort.__version__
         self.input = self.session.get_inputs()[0]
         self.output_names = [item.name for item in self.session.get_outputs()]
@@ -235,13 +278,33 @@ class OnnxDetector:
 
     def _session_options(self, *, gpu: bool):
         options = ort.SessionOptions()
+        options.enable_profiling = self.profile
+        if self.profile_file_prefix is not None:
+            options.profile_file_prefix = self.profile_file_prefix
         options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+
         if self.require_cuda:
             options.add_session_config_entry("session.disable_cpu_ep_fallback", "1")
+
         if not gpu:
             options.intra_op_num_threads = self._cpu_threads
             options.inter_op_num_threads = 1
+
         return options
+
+    def end_profiling(self) -> str | None:
+        """Stop ONNX Runtime profiling and return the generated trace path."""
+        if not self.profile or self._profiling_ended:
+            return None
+
+        with self.inference_lock:
+            if self._profiling_ended:
+                return None
+
+            profile_path = self.session.end_profiling()
+            self._profiling_ended = True
+
+        return profile_path
 
     def _create_session(self, requested: str):
         providers = ort.get_available_providers()
@@ -260,8 +323,13 @@ class OnnxDetector:
                     sess_options=self._session_options(gpu=True),
                     providers=["CUDAExecutionProvider"],
                 )
-                if not session.get_providers() or session.get_providers()[0] != "CUDAExecutionProvider":
-                    raise RuntimeError(f"CUDA was not selected: {session.get_providers()}")
+                if (
+                    not session.get_providers()
+                    or session.get_providers()[0] != "CUDAExecutionProvider"
+                ):
+                    raise RuntimeError(
+                        f"CUDA was not selected: {session.get_providers()}"
+                    )
                 return session
             except Exception as exc:
                 raise DeviceUnavailableError(
@@ -272,7 +340,9 @@ class OnnxDetector:
         if requested != "cpu" and not torch.cuda.is_available():
             cuda_error = "PyTorch reports CUDA unavailable on this machine."
         elif wants_cuda and "CUDAExecutionProvider" not in providers:
-            cuda_error = f"CUDAExecutionProvider unavailable; installed providers: {providers}"
+            cuda_error = (
+                f"CUDAExecutionProvider unavailable; installed providers: {providers}"
+            )
         elif wants_cuda:
             try:
                 # Importing torch above loads the compatible CUDA/cuDNN DLLs
@@ -282,7 +352,10 @@ class OnnxDetector:
                     sess_options=self._session_options(gpu=True),
                     providers=["CUDAExecutionProvider", "CPUExecutionProvider"],
                 )
-                if not session.get_providers() or session.get_providers()[0] != "CUDAExecutionProvider":
+                if (
+                    not session.get_providers()
+                    or session.get_providers()[0] != "CUDAExecutionProvider"
+                ):
                     raise RuntimeError(
                         f"CUDAExecutionProvider was not selected; session providers: {session.get_providers()}"
                     )
@@ -309,7 +382,9 @@ class OnnxDetector:
         iou_threshold: float = DEFAULT_IOU_THRESHOLD,
     ):
         if image_size not in (None, self.input_size):
-            raise ValueError(f"This ONNX export has a fixed input size of {self.input_size}x{self.input_size}")
+            raise ValueError(
+                f"This ONNX export has a fixed input size of {self.input_size}x{self.input_size}"
+            )
         if not 0.0 <= confidence <= 1.0:
             raise ValueError("confidence must be between 0.0 and 1.0")
         if not 0.0 < iou_threshold <= 1.0:
@@ -366,7 +441,9 @@ class OnnxDetector:
         iou_threshold: float = DEFAULT_IOU_THRESHOLD,
     ) -> DetectionRun:
         if warmup_runs < 0 or measured_runs < 1:
-            raise ValueError("warmup_runs must be non-negative and measured_runs must be at least 1")
+            raise ValueError(
+                "warmup_runs must be non-negative and measured_runs must be at least 1"
+            )
         image, load_ms = load_image(image_path)
         warmup_started = perf_counter()
         for _ in range(warmup_runs):
@@ -377,7 +454,9 @@ class OnnxDetector:
         runtime_samples = []
         postprocess_samples = []
         for _ in range(measured_runs):
-            _, total_ms = self.predict_frame(image, confidence, iou_threshold=iou_threshold)
+            _, total_ms = self.predict_frame(
+                image, confidence, iou_threshold=iou_threshold
+            )
             samples.append(total_ms)
             preprocess_samples.append(self.last_timings["preprocess_ms"])
             runtime_samples.append(self.last_timings["runtime_ms"])
@@ -397,7 +476,11 @@ class OnnxDetector:
             warmup_runs=warmup_runs,
             measured_runs=measured_runs,
             annotation_save_ms=annotate_save_ms,
-            total_ms=load_ms + warmup_ms + sum(samples) + annotate_save_ms + self.model_load_ms,
+            total_ms=load_ms
+            + warmup_ms
+            + sum(samples)
+            + annotate_save_ms
+            + self.model_load_ms,
             gpu_memory_baseline_mb=None,
             gpu_memory_peak_mb=None,
             gpu_memory_peak_reserved_mb=None,
