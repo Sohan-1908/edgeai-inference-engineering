@@ -1,6 +1,6 @@
 # EdgeAI CPU cloud demo setup
 
-This repository includes a standalone Streamlit image demo that runs the
+This repository includes a standalone Streamlit image and video demo that runs the
 tracked `models/yolo11n.onnx` model with ONNX Runtime's
 `CPUExecutionProvider`. It is separate from the API-backed dashboard in
 `app.py`; it does not require a FastAPI service, CUDA, or a GPU.
@@ -43,9 +43,11 @@ CUDA-enabled PyTorch, ONNX Runtime GPU, and the broader local project stack.
    repository.
 
 No secrets, API URL, or environment variables are required by `cloud_app.py`.
-The app accepts JPG, JPEG, or PNG image uploads and runs detection on the
-Streamlit host's CPU. It is a demonstration, not a GPU deployment or a
-performance benchmark.
+The app accepts JPG, JPEG, or PNG image uploads and MP4/MOV/AVI/MKV/WebM video
+uploads, and runs detection on the Streamlit host's CPU. Built-in sample image
+and video controls let visitors try the demo without preparing a file. Cloud
+video processing is capped at 20 seconds and 600 frames. This is a demonstration,
+not a GPU deployment or performance benchmark.
 
 ## Run locally on Windows
 
@@ -61,7 +63,7 @@ python -m streamlit run cloud_app.py
 ```
 
 Alternatively, install `requirements.txt`; it currently declares the same
-four packages and version ranges as `requirements-cloud.txt`. The local app
+dependencies and version ranges as `requirements-cloud.txt`. The local app
 uses the checked-in `.streamlit/config.toml` when run from the repository root.
 
 ## Dependency responsibilities

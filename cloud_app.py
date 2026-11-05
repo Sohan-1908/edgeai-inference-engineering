@@ -6,6 +6,7 @@ import tempfile
 import time
 from collections import Counter, defaultdict
 from pathlib import Path
+from types import SimpleNamespace
 
 import cv2
 import imageio_ffmpeg
@@ -26,8 +27,11 @@ SIZE = 640
 
 MAX_IMAGE_SIZE = 10 * 1024 * 1024
 MAX_VIDEO_SIZE = 50 * 1024 * 1024
-MAX_VIDEO_DURATION = 60
-MAX_VIDEO_FRAMES = 1800
+MAX_VIDEO_DURATION = 20
+MAX_VIDEO_FRAMES = 600
+SAMPLES = Path(__file__).parent / "samples"
+SAMPLE_IMAGE = SAMPLES / "bus.jpg"
+SAMPLE_VIDEO = SAMPLES / "sample_video.mp4"
 
 FFMPEG_TIMEOUT_SECONDS = 180
 VIDEO_WARMUP_FRAMES = 3
@@ -810,6 +814,8 @@ st.markdown(
         max-height: 420px;
     }
 
+    .tracks-table-wrap { margin-bottom: 1rem; }
+
     .data-table {
         width: 100%;
         border-collapse: collapse;
@@ -853,6 +859,20 @@ st.markdown(
     .data-table .num {
         text-align: right;
     }
+
+    .data-table.track-table th,
+    .data-table.track-table td { padding-left: 10px; padding-right: 10px; }
+    .data-table.track-table { table-layout: fixed; }
+    .data-table.track-table th:nth-child(1),
+    .data-table.track-table td:nth-child(1) { width: 12%; }
+    .data-table.track-table th:nth-child(2),
+    .data-table.track-table td:nth-child(2) { width: 22%; }
+    .data-table.track-table th:nth-child(3),
+    .data-table.track-table td:nth-child(3) { width: 18%; text-align: center; }
+    .data-table.track-table th:nth-child(4),
+    .data-table.track-table td:nth-child(4),
+    .data-table.track-table th:nth-child(5),
+    .data-table.track-table td:nth-child(5) { width: 24%; }
 
     .cell-strong {
         color: var(--ink);
@@ -1010,7 +1030,7 @@ def class_colors(name):
 
 
 def confidence_color(value):
-    if value >= 0.80:
+    if value >= 0.70:
         return "#34D399"
     if value >= 0.60:
         return "#FBBF24"
@@ -1159,7 +1179,7 @@ def column_chart(title, subtitle, rows, colors=None, max_px=140):
     )
 
 
-def html_table(df, max_height=420):
+def html_table(df, max_height=420, table_class="", wrapper_class=""):
     """Styled, scrollable HTML table with colour-coded cells."""
     numeric = {c: pd.api.types.is_numeric_dtype(df[c]) for c in df.columns}
 
@@ -1212,8 +1232,8 @@ def html_table(df, max_height=420):
         body_rows.append("<tr>" + "".join(cells) + "</tr>")
 
     st.markdown(
-        f'<div class="table-wrap" style="max-height:{max_height}px">'
-        f'<table class="data-table"><thead><tr>{head}</tr></thead>'
+        f'<div class="table-wrap {wrapper_class}" style="max-height:{max_height}px">'
+        f'<table class="data-table {table_class}"><thead><tr>{head}</tr></thead>'
         f"<tbody>{''.join(body_rows)}</tbody></table></div>",
         unsafe_allow_html=True,
     )
@@ -1689,10 +1709,10 @@ def process_video(
                 raise ValueError("Invalid video metadata or unsupported video.")
 
             if reported_frames > MAX_VIDEO_FRAMES:
-                raise ValueError("Video exceeds the 1800-frame limit.")
+                raise ValueError(f"Video exceeds the {MAX_VIDEO_FRAMES}-frame limit.")
 
             if reported_frames > 0 and reported_frames / fps > MAX_VIDEO_DURATION:
-                raise ValueError("Video duration exceeds 60 seconds.")
+                raise ValueError(f"Video duration exceeds {MAX_VIDEO_DURATION} seconds.")
 
             output_width = width + (width % 2)
             output_height = height + (height % 2)
@@ -1753,10 +1773,10 @@ def process_video(
 
                 while frame is not None:
                     if frames_processed >= MAX_VIDEO_FRAMES:
-                        raise ValueError("Video exceeds the 1800-frame limit.")
+                        raise ValueError(f"Video exceeds the {MAX_VIDEO_FRAMES}-frame limit.")
 
                     if frames_processed >= MAX_VIDEO_DURATION * fps:
-                        raise ValueError("Video duration exceeds 60 seconds.")
+                        raise ValueError(f"Video duration exceeds {MAX_VIDEO_DURATION} seconds.")
 
                     tensor, scale, left, top = preprocess(frame)
 
@@ -1997,8 +2017,8 @@ with st.sidebar:
         [
             ("Image", "10 MB"),
             ("Video", "50 MB"),
-            ("Duration", "60 sec"),
-            ("Frames", "1,800"),
+            ("Duration", f"{MAX_VIDEO_DURATION} sec"),
+            ("Frames", f"{MAX_VIDEO_FRAMES:,}"),
         ]
     )
 
@@ -2039,6 +2059,28 @@ with image_tab:
         key="image_upload",
         label_visibility="collapsed",
     )
+
+    sample_clicked = st.button(
+        "Try a sample image",
+        disabled=not SAMPLE_IMAGE.is_file(),
+        key="try_sample_image",
+    )
+    if sample_clicked:
+        st.session_state["image_sample_active"] = True
+    elif upload is not None:
+        signature = (upload.name, upload.size)
+        previous_signature = st.session_state.get("image_upload_signature")
+        if previous_signature is not None and signature != previous_signature:
+            st.session_state["image_sample_active"] = False
+        st.session_state["image_upload_signature"] = signature
+
+    if st.session_state.get("image_sample_active"):
+        sample_bytes = SAMPLE_IMAGE.read_bytes()
+        upload = SimpleNamespace(
+            name=SAMPLE_IMAGE.name,
+            size=len(sample_bytes),
+            getvalue=lambda: sample_bytes,
+        )
 
     if upload:
         if upload.size > MAX_IMAGE_SIZE:
@@ -2215,7 +2257,7 @@ with image_tab:
             "No results yet",
             "Your annotated image, charts and detection table will appear here.",
             [
-                "Upload an image above.",
+                "Upload an image above or choose Try a sample image.",
                 "Adjust the thresholds in the sidebar if needed.",
                 "Select Run detection.",
             ],
@@ -2231,7 +2273,7 @@ with video_tab:
     section(
         "Track objects in a video",
         "Every object gets an ID that stays with it from frame to frame. "
-        "Supported formats: MP4, MOV, AVI, MKV and WebM, up to 50 MB and 60 seconds.",
+        f"Supported formats: MP4, MOV, AVI, MKV and WebM, up to 50 MB and {MAX_VIDEO_DURATION} seconds.",
     )
 
     stages = [
@@ -2262,6 +2304,28 @@ with video_tab:
         key="video_upload",
         label_visibility="collapsed",
     )
+
+    sample_video_clicked = st.button(
+        "Try a sample video",
+        disabled=not SAMPLE_VIDEO.is_file(),
+        key="try_sample_video",
+    )
+    if sample_video_clicked:
+        st.session_state["video_sample_active"] = True
+    elif video_upload is not None:
+        signature = (video_upload.name, video_upload.size)
+        previous_signature = st.session_state.get("video_upload_signature")
+        if previous_signature is not None and signature != previous_signature:
+            st.session_state["video_sample_active"] = False
+        st.session_state["video_upload_signature"] = signature
+
+    if st.session_state.get("video_sample_active"):
+        sample_bytes = SAMPLE_VIDEO.read_bytes()
+        video_upload = SimpleNamespace(
+            name=SAMPLE_VIDEO.name,
+            size=len(sample_bytes),
+            getvalue=lambda: sample_bytes,
+        )
 
     if video_upload:
         if video_upload.size > MAX_VIDEO_SIZE:
@@ -2469,7 +2533,12 @@ with video_tab:
         if track_rows:
             track_df = pd.DataFrame(track_rows)
 
-            html_table(track_df)
+            html_table(
+                track_df,
+                max_height=520,
+                table_class="track-table",
+                wrapper_class="tracks-table-wrap",
+            )
 
             track_csv = track_df.to_csv(index=False).encode("utf-8")
 
@@ -2491,7 +2560,7 @@ with video_tab:
             "No results yet",
             "Your annotated video, performance numbers and track table will appear here.",
             [
-                "Upload a video above.",
+                "Upload a video above or choose Try a sample video.",
                 "Adjust the thresholds in the sidebar if needed.",
                 "Select Run detection and tracking.",
             ],

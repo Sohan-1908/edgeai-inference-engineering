@@ -6,6 +6,8 @@ It includes local PyTorch and ONNX Runtime inference, reproducible benchmark too
 
 **Scope:** This is an engineering portfolio project, not a trained model, production service, or claim of universal speed or accuracy improvements. Results below are specific to their recorded inputs, machine, runtime, and timing methodology.
 
+**Live demo:** [Try EdgeAI on Streamlit Community Cloud](https://edgeai-inference-engineering-hbw4y3fdgm6xygw5tusutp.streamlit.app/) · **Source:** [GitHub repository](https://github.com/Sohan-1908/edgeai-inference-engineering)
+
 ## Contents
 
 - [Problem and motivation](#problem-and-motivation)
@@ -42,6 +44,7 @@ EdgeAI provides repeatable experiments across PyTorch and ONNX Runtime and keeps
 - FastAPI image/video inference service with health/configuration endpoints and annotated outputs.
 - HTTP-only Streamlit dashboard (`app.py`) for that API.
 - Separate CPU-only ONNX Runtime Streamlit demonstration (`cloud_app.py`).
+- Built-in sample image and video buttons in the cloud demo; video processing is capped at 20 seconds and 600 frames for the free CPU tier.
 - Separate API/dashboard Dockerfiles and Compose configuration; container runtime validation is incomplete.
 
 ## Architecture
@@ -139,7 +142,7 @@ python -m streamlit run cloud_app.py
 
 The cloud app needs the FP32 ONNX artifact at `models/yolo11n.onnx`. A hosted deployment also needs that model available in its repository/build and a compatible Python/dependency setup.
 
-A hosted cloud deployment was not verified as part of the current validation.
+Open the [live CPU demo](https://edgeai-inference-engineering-hbw4y3fdgm6xygw5tusutp.streamlit.app/). The app runs on CPU; cold starts and video processing can take a little while.
 
 ## Image inference
 
@@ -388,7 +391,8 @@ See the [Phase 19C validation report](docs/phase19c_final_validation_report.md).
 
 - The FastAPI service is CUDA-only; no CPU API deployment is implemented.
 - `app.py` requires a reachable FastAPI service and does not support live webcam streaming, authentication, or persistent job history.
-- The standalone CPU cloud demo and API-backed dashboard are different applications; hosted cloud deployment was not validated.
+- The standalone CPU cloud demo and API-backed dashboard are different applications; the linked cloud demo does not provide local CUDA inference.
+- Dense scenes can still have overlapping labels when shown at 640×360; smaller labels would reduce readability.
 - Dockerfiles and Compose configuration exist, but container startup/build and NVIDIA container access were not verified.
 - The full test suite is not fully validated; 19 API-related tests remain outstanding, and live service checks have not passed in the restricted environment.
 - Fixed-shape ONNX exports require a matching model resolution. Video support depends on installed OpenCV codecs.
@@ -398,15 +402,11 @@ Recommended next steps are to finish the API/live/container validation on an unr
 
 ## Visuals
 
-No Streamlit dashboard screenshots were found in the repository. `edgeai_test.png` is not a dashboard screenshot.
+### Cloud demo
 
-Recommended captures:
+[Open the live EdgeAI demo](https://edgeai-inference-engineering-hbw4y3fdgm6xygw5tusutp.streamlit.app/) or use the sample image/video buttons to see the UI without preparing a file.
 
-1. Local dashboard showing healthy API connection, selected backend runtime, and an annotated image/detections.
-2. Video inference results with the metrics and annotated-video download control.
-3. The standalone CPU cloud demo showing its CPU inference result and latency.
-
-The repository does include this tracked annotated inference result:
+The repository also includes this tracked annotated inference result:
 
 ![Example YOLO11n detections on an image](edgeai_annotated.jpg)
 
