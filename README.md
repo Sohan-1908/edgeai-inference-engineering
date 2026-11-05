@@ -61,7 +61,6 @@ Python 3.12; PyTorch 2.14; Ultralytics YOLO; ONNX Runtime 1.30; ONNX; OpenCV; Nu
 
 - `requirements-gpu.txt` pins the full local CUDA-enabled PyTorch/ONNX Runtime stack.
 - `requirements-api.txt` and `requirements-dashboard.txt` provide separate API and dashboard container dependency sets.
-- `requirements-cloud.txt` provides CPU-only dependencies for the standalone ONNX demo.
 - `requirements.txt` contains the minimal CPU dependency set for the standalone cloud demo.
 
 The generic `requirements.txt` is not a replacement for the full CLI/API development environment.
@@ -89,7 +88,6 @@ The generic `requirements.txt` is not a replacement for the full CLI/API develop
 |-- benchmark_gpu_profile.py           # CUDA telemetry profiler
 |-- requirements.txt                  # Minimal CPU cloud-demo dependencies
 |-- requirements-gpu.txt              # Full CUDA-enabled local environment
-|-- requirements-cloud.txt            # Standalone CPU demo dependencies
 |-- requirements-api.txt              # API/container dependencies
 |-- requirements-dashboard.txt        # Dashboard/container dependencies
 |-- Dockerfile.api
@@ -136,7 +134,7 @@ Run the app locally in an isolated Python 3.12 environment:
 py -3.12 -m venv .venv-cloud
 .\.venv-cloud\Scripts\Activate.ps1
 python -m pip install --upgrade pip
-python -m pip install -r requirements-cloud.txt
+python -m pip install -r requirements.txt
 python -m streamlit run cloud_app.py
 ```
 

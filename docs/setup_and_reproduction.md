@@ -19,7 +19,6 @@ These are recorded experiment-environment details, not a guarantee that every de
 The repository provides separate dependency manifests:
 
 - `requirements.txt`: minimal CPU dependencies for the standalone cloud demo.
-- `requirements-cloud.txt`: equivalent dependencies for local cloud-demo setup.
 - `requirements-gpu.txt`: pinned CUDA/local development environment.
 
 For local GPU development on Windows PowerShell:

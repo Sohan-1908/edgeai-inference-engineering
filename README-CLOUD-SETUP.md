@@ -20,12 +20,10 @@ models/yolo11n.onnx
 .streamlit/config.toml   # Optional; applies the checked-in dark theme and upload limit
 ```
 
-The root `requirements.txt` contains the minimal CPU demo dependencies.
-`requirements-cloud.txt` has the same dependency declarations and is provided
-for an explicitly named cloud-only install in local environments. Use
-`requirements.txt` for Streamlit Community Cloud's root-level dependency
-discovery. Do not select `requirements-gpu.txt` for this demo; it installs
-CUDA-enabled PyTorch, ONNX Runtime GPU, and the broader local project stack.
+The root `requirements.txt` contains the minimal CPU demo dependencies and is
+used by Streamlit Community Cloud. Do not select `requirements-gpu.txt` for
+this demo; it installs CUDA-enabled PyTorch, ONNX Runtime GPU, and the broader
+local project stack.
 
 ## Deploy on Streamlit Community Cloud
 
@@ -58,20 +56,18 @@ the cloud-only dependency set:
 py -3.12 -m venv .venv-cloud
 .\.venv-cloud\Scripts\Activate.ps1
 python -m pip install --upgrade pip
-python -m pip install -r requirements-cloud.txt
+python -m pip install -r requirements.txt
 python -m streamlit run cloud_app.py
 ```
 
-Alternatively, install `requirements.txt`; it currently declares the same
-dependencies and version ranges as `requirements-cloud.txt`. The local app
-uses the checked-in `.streamlit/config.toml` when run from the repository root.
+The local app uses the checked-in `.streamlit/config.toml` when run from the
+repository root.
 
 ## Dependency responsibilities
 
 | File | Intended use |
 |---|---|
 | `requirements.txt` | Minimal CPU-only standalone cloud demo; recognized at the repository root by Streamlit Community Cloud. |
-| `requirements-cloud.txt` | Same minimal CPU-only set, named explicitly for local cloud-demo setup. |
 | `requirements-gpu.txt` | Full pinned Windows/Python 3.12 CUDA development environment; not for the CPU cloud demo. |
 | `requirements-api.txt` | FastAPI inference service/container dependencies. |
 | `requirements-dashboard.txt` | HTTP dashboard/container dependencies for `app.py`. |
