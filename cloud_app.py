@@ -1533,23 +1533,31 @@ def class_color_bgr(class_id):
 
 def annotate(im, dets):
     out = im.copy()
+    frame_h, frame_w = out.shape[:2]
 
-    # Scale line and text size with the image so labels stay readable.
-    short_side = min(out.shape[:2])
-    box_thickness = max(2, round(short_side / 400))
-    font_scale = max(0.5, min(1.2, short_side / 900))
+    # Scale line and text size with the image so labels stay readable,
+    # and keep labels short when the scene is crowded.
+    short_side = min(frame_h, frame_w)
+    box_thickness = max(1, round(short_side / 400))
+    font_scale = max(0.4, min(1.2, short_side / 900))
     text_thickness = max(1, round(font_scale * 2))
+    crowded = len(dets) > 6
 
     for d in dets:
         x1, y1, x2, y2 = map(lambda x: int(round(x)), d["box"])
-        color = class_color_bgr(d.get("class_id", 0))
+
+        # Tracked objects are coloured by track ID, plain detections by class.
+        if d.get("tracker_id") is not None:
+            color = class_color_bgr(d["tracker_id"])
+            if crowded:
+                label = f"#{d['tracker_id']} {d['confidence']:.2f}"
+            else:
+                label = f"#{d['tracker_id']} {d['class']} {d['confidence']:.2f}"
+        else:
+            color = class_color_bgr(d.get("class_id", 0))
+            label = f"{d['class']} {d['confidence']:.2f}"
 
         cv2.rectangle(out, (x1, y1), (x2, y2), color, box_thickness)
-
-        if d.get("tracker_id") is not None:
-            label = f"#{d['tracker_id']} {d['class']} {d['confidence']:.2f}"
-        else:
-            label = f"{d['class']} {d['confidence']:.2f}"
 
         (tw, th), base = cv2.getTextSize(
             label,
@@ -1558,12 +1566,15 @@ def annotate(im, dets):
             text_thickness,
         )
 
+        # Keep the label fully inside the frame.
+        label_w = tw + 10
+        lx = max(0, min(x1, frame_w - label_w))
         y = max(th + base + 6, y1)
 
         cv2.rectangle(
             out,
-            (x1, max(0, y - th - base - 6)),
-            (x1 + tw + 10, y),
+            (lx, max(0, y - th - base - 6)),
+            (lx + label_w, y),
             color,
             -1,
         )
@@ -1571,7 +1582,7 @@ def annotate(im, dets):
         cv2.putText(
             out,
             label,
-            (x1 + 5, y - base - 3),
+            (lx + 5, y - base - 3),
             cv2.FONT_HERSHEY_SIMPLEX,
             font_scale,
             (255, 255, 255),
@@ -1777,6 +1788,12 @@ def process_video(
                         raw_detections,
                         names,
                     )
+
+                    # The tracker needs low-score boxes to keep IDs alive, but
+                    # only show objects at or above the user's threshold.
+                    tracked_detections = [
+                        d for d in tracked_detections if d["confidence"] >= confidence
+                    ]
 
                     total_tracked_detections += len(tracked_detections)
 
